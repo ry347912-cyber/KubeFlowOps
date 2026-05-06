@@ -65,6 +65,9 @@ GitHub Actions CD Triggered
 | 🌐 Nginx Proxy | Rate limiting + security headers |
 
 ---
+## 📊 Live Dashboard
+
+![DevOps Command Center](Dashboard.png)
 
 ## 🏗️ Architecture
 
