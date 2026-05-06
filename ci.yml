@@ -1,0 +1,159 @@
+name: 🔍 CI — Test & Build
+
+on:
+  push:
+    branches: ["main", "develop", "feature/**"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  PYTHON_VERSION: "3.11"
+  AWS_REGION:     "ap-south-1"
+
+jobs:
+
+  # ──────────────────────────────────────────────
+  #  Job 1 — Run Tests
+  # ──────────────────────────────────────────────
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: 📦 Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r app/requirements.txt
+
+      - name: ✅ Run Tests with Coverage
+        run: |
+          cd app
+          pytest tests/ -v \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=80
+
+      - name: 📊 Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: app/coverage.xml
+
+  # ──────────────────────────────────────────────
+  #  Job 2 — Security Scan
+  # ──────────────────────────────────────────────
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: ⬇️ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 🔍 Bandit — Python Security Linter
+        run: |
+          pip install bandit
+          bandit -r app/ -f json -o bandit-report.json || true
+          bandit -r app/ --severity-level medium
+
+      - name: 📁 Upload Security Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report
+          path: bandit-report.json
+
+  # ──────────────────────────────────────────────
+  #  Job 3 — Docker Build & Push to ECR
+  # ──────────────────────────────────────────────
+  docker-build:
+    name: 🐳 Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main'
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+
+    steps:
+      - name: ⬇️ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🏷️ Generate Image Tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          echo "image-tag=${SHORT_SHA}-${TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "Image Tag: ${SHORT_SHA}-${TIMESTAMP}"
+
+      - name: ☁️ Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🐳 Build Docker Image
+        run: |
+          docker build \
+            --build-arg APP_VERSION=${{ steps.meta.outputs.image-tag }} \
+            --build-arg BUILD_NUMBER=${{ github.run_number }} \
+            --build-arg GIT_COMMIT=${{ github.sha }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ steps.meta.outputs.image-tag }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest \
+            .
+
+      - name: 🔍 Scan Image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ steps.meta.outputs.image-tag }}
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+      - name: 📤 Push to ECR
+        run: |
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ steps.meta.outputs.image-tag }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+          echo "✅ Image pushed: ${{ steps.meta.outputs.image-tag }}"
+
+  # ──────────────────────────────────────────────
+  #  Job 4 — Notify on Failure
+  # ──────────────────────────────────────────────
+  notify-failure:
+    name: 🔔 Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [test, security, docker-build]
+    if: failure()
+
+    steps:
+      - name: 📣 Slack Notification
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "❌ CI FAILED on *${{ github.repository }}*\nBranch: `${{ github.ref_name }}`\nCommit: `${{ github.sha }}`\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
