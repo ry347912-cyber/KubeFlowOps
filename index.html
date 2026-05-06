@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DevOps Command Center — CI/CD Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #040911;
+    --surface:   #080f1a;
+    --card:      #0b1420;
+    --border:    #0f2040;
+    --accent:    #00d4ff;
+    --green:     #00ff88;
+    --orange:    #ff8800;
+    --red:       #ff3355;
+    --purple:    #a855f7;
+    --text:      #e2e8f0;
+    --muted:     #4a6080;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-main: 'Space Grotesk', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-main);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid Background ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Glow orbs ── */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: .12;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb-1 { width:500px; height:500px; background:var(--accent); top:-100px; left:-100px; }
+  .orb-2 { width:400px; height:400px; background:var(--purple); bottom:-100px; right:-100px; }
+
+  main { position:relative; z-index:1; padding: 24px 32px; max-width:1600px; margin:0 auto; }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    display:flex; align-items:center; gap:14px;
+  }
+  .logo-icon {
+    width:44px; height:44px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px;
+  }
+  .logo h1 { font-size:1.35rem; font-weight:700; letter-spacing:-.5px; }
+  .logo p  { font-size:.75rem; color:var(--muted); font-family:var(--font-mono); }
+
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .live-badge {
+    display:flex; align-items:center; gap:7px;
+    background:rgba(0,255,136,.08);
+    border:1px solid rgba(0,255,136,.2);
+    border-radius:20px;
+    padding:6px 14px;
+    font-size:.78rem; font-family:var(--font-mono); color:var(--green);
+  }
+  .live-dot {
+    width:7px; height:7px; border-radius:50%;
+    background:var(--green);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+  .clock { font-family:var(--font-mono); font-size:.82rem; color:var(--muted); }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size:.7rem;
+    font-family:var(--font-mono);
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:2px;
+    margin-bottom:14px;
+  }
+
+  /* ── DORA Metrics ── */
+  .dora-grid {
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:16px;
+    margin-bottom:28px;
+  }
+
+  .dora-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:22px;
+    position:relative;
+    overflow:hidden;
+    transition: border-color .3s, transform .2s;
+  }
+  .dora-card:hover { border-color:rgba(0,212,255,.3); transform:translateY(-2px); }
+  .dora-card::before {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0;
+    height:2px;
+  }
+  .dora-card.elite::before  { background:linear-gradient(90deg,var(--green),var(--accent)); }
+  .dora-card.high::before   { background:linear-gradient(90deg,var(--accent),var(--purple)); }
+  .dora-card.medium::before { background:linear-gradient(90deg,var(--orange),var(--red)); }
+
+  .dora-label {
+    font-size:.72rem;
+    font-family:var(--font-mono);
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+    margin-bottom:10px;
+  }
+  .dora-value {
+    font-size:2.2rem;
+    font-weight:700;
+    letter-spacing:-1px;
+    line-height:1;
+    margin-bottom:6px;
+  }
+  .dora-value.green  { color:var(--green); }
+  .dora-value.accent { color:var(--accent); }
+  .dora-value.orange { color:var(--orange); }
+  .dora-value.purple { color:var(--purple); }
+
+  .dora-sub  { font-size:.75rem; color:var(--muted); }
+  .dora-rank {
+    margin-top:12px;
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:20px;
+    font-size:.68rem;
+    font-family:var(--font-mono);
+    font-weight:600;
+  }
+  .rank-elite  { background:rgba(0,255,136,.15); color:var(--green); border:1px solid rgba(0,255,136,.3); }
+  .rank-high   { background:rgba(0,212,255,.12); color:var(--accent); border:1px solid rgba(0,212,255,.3); }
+  .rank-medium { background:rgba(255,136,0,.12); color:var(--orange); border:1px solid rgba(255,136,0,.3); }
+
+  /* ── Middle Row ── */
+  .mid-row {
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:16px;
+    margin-bottom:28px;
+  }
+
+  .card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:22px;
+  }
+  .card-title {
+    font-size:.72rem;
+    font-family:var(--font-mono);
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+    margin-bottom:18px;
+    display:flex; align-items:center; gap:8px;
+  }
+
+  /* ── Pipeline Timeline ── */
+  .pipeline-list { display:flex; flex-direction:column; gap:10px; }
+  .pipeline-item {
+    display:flex; align-items:center; gap:12px;
+    padding:12px;
+    background:var(--surface);
+    border-radius:10px;
+    border:1px solid var(--border);
+    font-size:.8rem;
+    transition: border-color .2s;
+  }
+  .pipeline-item:hover { border-color:rgba(0,212,255,.2); }
+  .pip-status {
+    width:28px; height:28px;
+    border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.9rem;
+    flex-shrink:0;
+  }
+  .pip-status.pass { background:rgba(0,255,136,.12); }
+  .pip-status.fail { background:rgba(255,51,85,.12); }
+  .pip-status.run  { background:rgba(0,212,255,.12); }
+  .pip-info { flex:1; }
+  .pip-commit { font-family:var(--font-mono); font-size:.72rem; color:var(--accent); }
+  .pip-msg   { color:var(--text); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+  .pip-time  { font-size:.7rem; color:var(--muted); font-family:var(--font-mono); }
+  .pip-dur   { font-family:var(--font-mono); font-size:.72rem; color:var(--muted); }
+
+  /* ── Deployment Bar Chart ── */
+  .bar-chart { display:flex; align-items:flex-end; gap:6px; height:80px; }
+  .bar-wrap  { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .bar {
+    width:100%;
+    border-radius:4px 4px 0 0;
+    background:linear-gradient(180deg,var(--accent),rgba(0,212,255,.3));
+    transition: height .8s cubic-bezier(.34,1.56,.64,1);
+    min-height:4px;
+  }
+  .bar.fail { background:linear-gradient(180deg,var(--red),rgba(255,51,85,.3)); }
+  .bar-label { font-size:.62rem; color:var(--muted); font-family:var(--font-mono); }
+
+  /* ── Stage Progress ── */
+  .stage-list { display:flex; flex-direction:column; gap:8px; }
+  .stage-item {
+    display:flex; align-items:center; gap:10px;
+    font-size:.78rem;
+  }
+  .stage-name { width:100px; color:var(--muted); font-family:var(--font-mono); font-size:.72rem; }
+  .stage-bar-wrap { flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .stage-bar {
+    height:100%;
+    border-radius:3px;
+    background:linear-gradient(90deg,var(--accent),var(--purple));
+    transition: width 1.2s cubic-bezier(.34,1.56,.64,1);
+  }
+  .stage-time { width:40px; text-align:right; color:var(--text); font-family:var(--font-mono); font-size:.72rem; }
+
+  /* ── Blue-Green Status ── */
+  .bg-row {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-bottom:28px;
+  }
+
+  .env-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:22px;
+    position:relative;
+    overflow:hidden;
+  }
+  .env-card.active  { border-color:rgba(0,255,136,.3); }
+  .env-card.standby { border-color:rgba(0,212,255,.15); }
+
+  .env-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .env-name   { font-size:1rem; font-weight:700; }
+  .env-badge  {
+    padding:4px 12px;
+    border-radius:20px;
+    font-size:.7rem;
+    font-family:var(--font-mono);
+    font-weight:600;
+  }
+  .badge-live    { background:rgba(0,255,136,.15); color:var(--green); border:1px solid rgba(0,255,136,.3); }
+  .badge-standby { background:rgba(0,212,255,.1);  color:var(--accent); border:1px solid rgba(0,212,255,.2); }
+
+  .env-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .env-stat-label { font-size:.68rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:1px; }
+  .env-stat-val   { font-size:1.1rem; font-weight:700; margin-top:3px; }
+
+  /* ── AI Release Notes ── */
+  .release-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:22px;
+    margin-bottom:28px;
+    position:relative;
+    overflow:hidden;
+  }
+  .release-card::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background:linear-gradient(135deg,rgba(168,85,247,.04),rgba(0,212,255,.04));
+    pointer-events:none;
+  }
+
+  .release-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .ai-badge {
+    display:flex; align-items:center; gap:7px;
+    background:rgba(168,85,247,.12);
+    border:1px solid rgba(168,85,247,.3);
+    border-radius:20px;
+    padding:5px 12px;
+    font-size:.72rem;
+    font-family:var(--font-mono);
+    color:var(--purple);
+  }
+
+  .release-version {
+    font-family:var(--font-mono);
+    font-size:.78rem;
+    color:var(--accent);
+    margin-bottom:10px;
+  }
+  .release-notes-text {
+    font-size:.83rem;
+    line-height:1.8;
+    color:var(--text);
+  }
+  .release-notes-text .tag {
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:4px;
+    font-size:.7rem;
+    font-weight:600;
+    margin-right:6px;
+    font-family:var(--font-mono);
+  }
+  .tag.feat { background:rgba(0,255,136,.15); color:var(--green); }
+  .tag.fix  { background:rgba(255,136,0,.15); color:var(--orange); }
+  .tag.perf { background:rgba(0,212,255,.12); color:var(--accent); }
+  .tag.sec  { background:rgba(255,51,85,.12); color:var(--red); }
+  .tag.infra{ background:rgba(168,85,247,.12); color:var(--purple); }
+
+  /* ── Self Heal Log ── */
+  .heal-log {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px;
+    font-family:var(--font-mono);
+    font-size:.75rem;
+    max-height:160px;
+    overflow-y:auto;
+    line-height:2;
+  }
+  .heal-log::-webkit-scrollbar { width:4px; }
+  .heal-log::-webkit-scrollbar-track { background:transparent; }
+  .heal-log::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  .log-ok   { color:var(--green); }
+  .log-warn { color:var(--orange); }
+  .log-info { color:var(--accent); }
+  .log-ts   { color:var(--muted); margin-right:8px; }
+
+  /* ── Perf Metrics ── */
+  .perf-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .perf-item {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px;
+  }
+  .perf-label { font-size:.68rem; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; }
+  .perf-value { font-size:1.4rem; font-weight:700; margin-top:4px; }
+
+  /* ── Bottom Row ── */
+  .bot-row {
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:16px;
+  }
+
+  /* ── Typewriter cursor ── */
+  .cursor { display:inline-block; width:8px; height:14px; background:var(--accent); animation:blink .7s step-end infinite; vertical-align:middle; border-radius:1px; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ── Animations ── */
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(20px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .dora-card { animation:fadeUp .5s ease both; }
+  .dora-card:nth-child(1) { animation-delay:.05s; }
+  .dora-card:nth-child(2) { animation-delay:.10s; }
+  .dora-card:nth-child(3) { animation-delay:.15s; }
+  .dora-card:nth-child(4) { animation-delay:.20s; }
+
+  /* ── Number counter animation ── */
+  .counter { transition: all .3s; }
+
+  /* scrollbar global */
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+</style>
+</head>
+<body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<main>
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <h1>DevOps Command Center</h1>
+        <p>CI/CD · DORA Metrics · Blue-Green · AI Release Notes</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- ── DORA Metrics ── -->
+  <div class="section-title">📊 DORA Metrics — Industry Benchmark</div>
+  <div class="dora-grid">
+    <div class="dora-card elite">
+      <div class="dora-label">Deployment Frequency</div>
+      <div class="dora-value green" id="deploy-freq">8.4</div>
+      <div class="dora-sub">deploys / day</div>
+      <span class="dora-rank rank-elite">ELITE</span>
+    </div>
+    <div class="dora-card elite">
+      <div class="dora-label">Lead Time for Changes</div>
+      <div class="dora-value accent" id="lead-time">23</div>
+      <div class="dora-sub">minutes avg</div>
+      <span class="dora-rank rank-elite">ELITE</span>
+    </div>
+    <div class="dora-card high">
+      <div class="dora-label">Change Failure Rate</div>
+      <div class="dora-value purple" id="cfr">2.1</div>
+      <div class="dora-sub">percent</div>
+      <span class="dora-rank rank-high">HIGH</span>
+    </div>
+    <div class="dora-card elite">
+      <div class="dora-label">Mean Time to Recovery</div>
+      <div class="dora-value green" id="mttr">4.2</div>
+      <div class="dora-sub">minutes avg</div>
+      <span class="dora-rank rank-elite">ELITE</span>
+    </div>
+  </div>
+
+  <!-- ── Middle Row ── -->
+  <div class="mid-row">
+
+    <!-- Pipeline Activity -->
+    <div class="card">
+      <div class="card-title">🔄 Pipeline Activity</div>
+      <div class="pipeline-list" id="pipeline-list"></div>
+    </div>
+
+    <!-- Deployment Frequency Chart -->
+    <div class="card">
+      <div class="card-title">📈 Deployments — Last 7 Days</div>
+      <div class="bar-chart" id="bar-chart"></div>
+      <div style="height:12px"></div>
+      <div class="section-title" style="margin-bottom:10px">⏱ Avg Stage Duration</div>
+      <div class="stage-list" id="stage-list"></div>
+    </div>
+
+    <!-- Performance Gate Results -->
+    <div class="card">
+      <div class="card-title">⚡ Performance Gate — Latest Run</div>
+      <div class="perf-grid">
+        <div class="perf-item">
+          <div class="perf-label">Avg Response</div>
+          <div class="perf-value" style="color:var(--green)" id="avg-resp">48ms</div>
+        </div>
+        <div class="perf-item">
+          <div class="perf-label">P95 Latency</div>
+          <div class="perf-value" style="color:var(--accent)" id="p95">112ms</div>
+        </div>
+        <div class="perf-item">
+          <div class="perf-label">Req/sec</div>
+          <div class="perf-value" style="color:var(--purple)" id="rps">247</div>
+        </div>
+        <div class="perf-item">
+          <div class="perf-label">Error Rate</div>
+          <div class="perf-value" style="color:var(--green)" id="err-rate">0.0%</div>
+        </div>
+        <div class="perf-item">
+          <div class="perf-label">Failure Rate</div>
+          <div class="perf-value" style="color:var(--green)">0.0%</div>
+        </div>
+        <div class="perf-item">
+          <div class="perf-label">Gate Status</div>
+          <div class="perf-value" style="color:var(--green);font-size:.95rem">✅ PASS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Blue-Green Deployment Status ── -->
+  <div class="section-title">🔵🟢 Blue-Green Deployment Status</div>
+  <div class="bg-row">
+    <div class="env-card active">
+      <div class="env-header">
+        <div class="env-name" style="color:var(--green)">🟢 GREEN Environment</div>
+        <span class="env-badge badge-live">● LIVE TRAFFIC</span>
+      </div>
+      <div class="env-stats">
+        <div>
+          <div class="env-stat-label">Version</div>
+          <div class="env-stat-val" style="color:var(--green);font-size:.9rem;font-family:var(--font-mono)" id="green-ver">v2.7.4</div>
+        </div>
+        <div>
+          <div class="env-stat-label">Uptime</div>
+          <div class="env-stat-val" style="color:var(--text)" id="green-uptime">99.98%</div>
+        </div>
+        <div>
+          <div class="env-stat-label">Health</div>
+          <div class="env-stat-val" style="color:var(--green)">Healthy</div>
+        </div>
+      </div>
+    </div>
+    <div class="env-card standby">
+      <div class="env-header">
+        <div class="env-name" style="color:var(--accent)">🔵 BLUE Environment</div>
+        <span class="env-badge badge-standby">⏸ STANDBY</span>
+      </div>
+      <div class="env-stats">
+        <div>
+          <div class="env-stat-label">Version</div>
+          <div class="env-stat-val" style="color:var(--accent);font-size:.9rem;font-family:var(--font-mono)" id="blue-ver">v2.7.3</div>
+        </div>
+        <div>
+          <div class="env-stat-label">Role</div>
+          <div class="env-stat-val" style="color:var(--text);font-size:.85rem">Rollback</div>
+        </div>
+        <div>
+          <div class="env-stat-label">Health</div>
+          <div class="env-stat-val" style="color:var(--green)">Healthy</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── AI Release Notes ── -->
+  <div class="release-card">
+    <div class="release-header">
+      <div class="card-title" style="margin-bottom:0">🤖 AI-Generated Release Notes</div>
+      <div class="ai-badge">✦ Claude AI · Auto-Generated</div>
+    </div>
+    <div class="release-version" id="release-ver">v2.7.4 · Deployed 2 minutes ago · Commit: a3f8c2d</div>
+    <div class="release-notes-text" id="release-notes">
+      <span class="tag feat">FEAT</span> Added Blue-Green deployment strategy — zero downtime releases with instant rollback capability<br>
+      <span class="tag perf">PERF</span> Performance gate now validates P95 latency ≤ 200ms before any production deployment proceeds<br>
+      <span class="tag infra">INFRA</span> Terraform-provisioned EC2 infra with auto-scaling security group rules and ECR lifecycle policies<br>
+      <span class="tag sec">SEC</span> Trivy container scan + Bandit SAST integrated — no CRITICAL/HIGH vulnerabilities detected in this build<br>
+      <span class="tag fix">FIX</span> Resolved Nginx rate-limiting header propagation on /api/echo endpoint under concurrent load
+    </div>
+  </div>
+
+  <!-- ── Bottom Row ── -->
+  <div class="bot-row">
+
+    <!-- Self-Healing Log -->
+    <div class="card">
+      <div class="card-title">🔧 Self-Healing Monitor</div>
+      <div class="heal-log" id="heal-log">
+        <div><span class="log-ts">05:14:32</span><span class="log-ok">✅ Health check PASSED — /health 200 OK (12ms)</span></div>
+        <div><span class="log-ts">05:12:01</span><span class="log-ok">✅ Health check PASSED — /health 200 OK (9ms)</span></div>
+        <div><span class="log-ts">05:08:47</span><span class="log-info">🔄 Container auto-restarted — memory limit reached</span></div>
+        <div><span class="log-ts">05:08:44</span><span class="log-warn">⚠️ High memory usage detected — 91% threshold exceeded</span></div>
+        <div><span class="log-ts">05:06:30</span><span class="log-ok">✅ Health check PASSED — /health 200 OK (11ms)</span></div>
+        <div><span class="log-ts">05:04:18</span><span class="log-ok">✅ Health check PASSED — /health 200 OK (8ms)</span></div>
+        <div><span class="log-ts">05:02:05</span><span class="log-ok">✅ Health check PASSED — /health 200 OK (14ms)</span></div>
+        <div><span class="log-ts">04:58:33</span><span class="log-info">📤 Deployment v2.7.4 completed — switched to GREEN</span></div>
+        <div><span class="log-ts">04:56:11</span><span class="log-info">🔵 BLUE marked standby — rollback target set</span></div>
+      </div>
+    </div>
+
+    <!-- Security Scan Summary -->
+    <div class="card">
+      <div class="card-title">🔒 Security Scan — Latest</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="pipeline-item">
+          <div class="pip-status pass">🛡️</div>
+          <div class="pip-info">
+            <div class="pip-commit">Bandit SAST</div>
+            <div class="pip-msg" style="max-width:200px">0 High · 0 Medium · 2 Low</div>
+          </div>
+          <span style="color:var(--green);font-family:var(--font-mono);font-size:.75rem">PASS</span>
+        </div>
+        <div class="pipeline-item">
+          <div class="pip-status pass">🐳</div>
+          <div class="pip-info">
+            <div class="pip-commit">Trivy Container</div>
+            <div class="pip-msg" style="max-width:200px">0 CRITICAL · 1 HIGH · 3 MEDIUM</div>
+          </div>
+          <span style="color:var(--green);font-family:var(--font-mono);font-size:.75rem">PASS</span>
+        </div>
+        <div class="pipeline-item">
+          <div class="pip-status pass">⚡</div>
+          <div class="pip-info">
+            <div class="pip-commit">Load Test Gate</div>
+            <div class="pip-msg" style="max-width:200px">P95 112ms · 0% errors</div>
+          </div>
+          <span style="color:var(--green);font-family:var(--font-mono);font-size:.75rem">PASS</span>
+        </div>
+        <div class="pipeline-item">
+          <div class="pip-status pass">🧪</div>
+          <div class="pip-info">
+            <div class="pip-commit">Unit Tests</div>
+            <div class="pip-msg" style="max-width:200px">9/9 passed · 95% coverage</div>
+          </div>
+          <span style="color:var(--green);font-family:var(--font-mono);font-size:.75rem">PASS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AWS Cost Tracker -->
+    <div class="card">
+      <div class="card-title">💰 AWS Cost Tracker (Free Tier)</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border);font-size:.8rem">
+          <span style="color:var(--muted);font-family:var(--font-mono)">EC2 t2.micro</span>
+          <span style="color:var(--green);font-family:var(--font-mono)">$0.00 / FREE</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border);font-size:.8rem">
+          <span style="color:var(--muted);font-family:var(--font-mono)">ECR Storage</span>
+          <span style="color:var(--green);font-family:var(--font-mono)">$0.00 / FREE</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border);font-size:.8rem">
+          <span style="color:var(--muted);font-family:var(--font-mono)">Data Transfer</span>
+          <span style="color:var(--accent);font-family:var(--font-mono)">$0.02</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(0,255,136,.05);border-radius:8px;border:1px solid rgba(0,255,136,.2);font-size:.82rem">
+          <span style="color:var(--text);font-weight:600">Total This Month</span>
+          <span style="color:var(--green);font-weight:700;font-family:var(--font-mono)">$0.02</span>
+        </div>
+        <div style="font-size:.7rem;color:var(--muted);font-family:var(--font-mono);text-align:center">
+          🎯 720 / 750 Free Tier hours remaining
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script>
+// ── Clock ──
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-GB');
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Pipeline activity ──
+const pipelines = [
+  { status:'pass', emoji:'✅', commit:'a3f8c2d', msg:'feat: blue-green deployment', time:'2m ago',  dur:'1m 48s' },
+  { status:'pass', emoji:'✅', commit:'b1e7d4a', msg:'fix: nginx rate limit headers', time:'38m ago', dur:'1m 52s' },
+  { status:'pass', emoji:'✅', commit:'c9a3f1e', msg:'perf: gunicorn worker tuning',  time:'2h ago',  dur:'1m 44s' },
+  { status:'fail', emoji:'❌', commit:'d4b2c8f', msg:'feat: LSTM anomaly detection',  time:'4h ago',  dur:'0m 58s' },
+  { status:'pass', emoji:'✅', commit:'e7f1a3b', msg:'infra: ECR lifecycle policy',   time:'6h ago',  dur:'1m 39s' },
+];
+const list = document.getElementById('pipeline-list');
+pipelines.forEach(p => {
+  list.innerHTML += `
+    <div class="pipeline-item">
+      <div class="pip-status ${p.status}">${p.emoji}</div>
+      <div class="pip-info">
+        <div class="pip-commit">${p.commit}</div>
+        <div class="pip-msg">${p.msg}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="pip-time">${p.time}</div>
+        <div class="pip-dur">${p.dur}</div>
+      </div>
+    </div>`;
+});
+
+// ── Bar chart ──
+const days  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const counts= [6, 9, 7, 11, 8, 3, 8];
+const maxC  = Math.max(...counts);
+const chart = document.getElementById('bar-chart');
+days.forEach((d,i) => {
+  const h = Math.round((counts[i]/maxC)*70);
+  chart.innerHTML += `
+    <div class="bar-wrap">
+      <div class="bar" style="height:${h}px" title="${counts[i]} deploys"></div>
+      <div class="bar-label">${d}</div>
+    </div>`;
+});
+
+// ── Stage durations ──
+const stages = [
+  { name:'Test',     pct:35, time:'38s' },
+  { name:'Security', pct:28, time:'31s' },
+  { name:'Build',    pct:82, time:'89s' },
+  { name:'Deploy',   pct:45, time:'49s' },
+  { name:'Health',   pct:15, time:'16s' },
+];
+const stageList = document.getElementById('stage-list');
+stages.forEach(s => {
+  stageList.innerHTML += `
+    <div class="stage-item">
+      <div class="stage-name">${s.name}</div>
+      <div class="stage-bar-wrap"><div class="stage-bar" style="width:0%" data-pct="${s.pct}"></div></div>
+      <div class="stage-time">${s.time}</div>
+    </div>`;
+});
+// Animate bars after paint
+setTimeout(() => {
+  document.querySelectorAll('.stage-bar').forEach(b => {
+    b.style.width = b.dataset.pct + '%';
+  });
+}, 200);
+
+// ── Simulate live self-healing log ──
+const healLog = document.getElementById('heal-log');
+function addLogEntry() {
+  const entries = [
+    { cls:'log-ok',   msg:'✅ Health check PASSED — /health 200 OK (' + (Math.floor(Math.random()*20)+6) + 'ms)' },
+    { cls:'log-ok',   msg:'✅ Health check PASSED — /health 200 OK (' + (Math.floor(Math.random()*15)+8) + 'ms)' },
+    { cls:'log-info', msg:'📊 DORA metrics snapshot saved to metrics.json' },
+  ];
+  const e = entries[Math.floor(Math.random()*entries.length)];
+  const now = new Date().toLocaleTimeString('en-GB');
+  const div = document.createElement('div');
+  div.innerHTML = `<span class="log-ts">${now}</span><span class="${e.cls}">${e.msg}</span>`;
+  healLog.insertBefore(div, healLog.firstChild);
+}
+setInterval(addLogEntry, 4000);
+
+// ── Subtle metric drift to show "live" ──
+setInterval(() => {
+  const el = document.getElementById('avg-resp');
+  el.textContent = (Math.floor(Math.random()*20)+38) + 'ms';
+  document.getElementById('rps').textContent = Math.floor(Math.random()*40)+220;
+}, 3000);
+</script>
+</body>
+</html>
