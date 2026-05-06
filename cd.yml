@@ -1,0 +1,144 @@
+name: 🚀 CD — Deploy to AWS EC2
+
+on:
+  workflow_run:
+    workflows: ["🔍 CI — Test & Build"]
+    types: [completed]
+    branches: [main]
+
+env:
+  AWS_REGION: "ap-south-1"
+
+jobs:
+
+  # ──────────────────────────────────────────────
+  #  Deploy to EC2
+  # ──────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy to EC2
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    environment:
+      name: production
+      url: http://${{ secrets.EC2_HOST }}
+
+    steps:
+      - name: ⬇️ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ☁️ Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 📝 Create Deploy Script
+        run: |
+          cat > deploy_remote.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚀 Starting Deployment — $(date)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          ECR_REGISTRY="$1"
+          ECR_REPO="$2"
+          IMAGE_TAG="latest"
+          DEPLOY_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Login to ECR
+          aws ecr get-login-password --region ap-south-1 | \
+            docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+          echo "📥 Pulling latest image..."
+          docker pull "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
+          echo "⏹️ Stopping old container (if running)..."
+          docker stop cicd-app 2>/dev/null || true
+          docker rm   cicd-app 2>/dev/null || true
+
+          echo "▶️ Starting new container..."
+          docker run -d \
+            --name cicd-app \
+            --restart unless-stopped \
+            -p 5000:5000 \
+            -e ENVIRONMENT=production \
+            -e DEPLOY_TIME="$DEPLOY_TIME" \
+            -e AWS_REGION=ap-south-1 \
+            "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
+          echo "⏳ Waiting for health check..."
+          sleep 10
+
+          # Health check loop
+          for i in {1..5}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/health || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Health check PASSED (attempt $i)"
+              break
+            fi
+            echo "⚠️ Health check attempt $i failed (status: $STATUS), retrying..."
+            sleep 5
+            if [ "$i" = "5" ]; then
+              echo "❌ Health check FAILED — rolling back!"
+              docker stop cicd-app || true
+              exit 1
+            fi
+          done
+
+          # Clean up old images
+          docker image prune -f
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Deployment SUCCESSFUL — $(date)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          SCRIPT
+          chmod +x deploy_remote.sh
+
+      - name: 🔑 Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 📤 Copy Deploy Script to EC2
+        run: |
+          scp -i ~/.ssh/deploy_key deploy_remote.sh \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/deploy_remote.sh
+
+      - name: 🚀 Execute Deployment on EC2
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.EC2_HOST }} \
+            "bash /home/ubuntu/deploy_remote.sh \
+              ${{ steps.login-ecr.outputs.registry }} \
+              ${{ secrets.ECR_REPOSITORY }}"
+
+      - name: ✅ Notify Slack — Success
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "✅ DEPLOYED SUCCESSFULLY!\nRepo: *${{ github.repository }}*\nBranch: `main`\nCommit: `${{ github.sha }}`\nURL: http://${{ secrets.EC2_HOST }}\nTime: ${{ github.event.head_commit.timestamp }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: ❌ Notify Slack — Failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "❌ DEPLOYMENT FAILED!\nRepo: *${{ github.repository }}*\nBranch: `main`\nCheck logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
